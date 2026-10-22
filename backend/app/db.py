@@ -25,12 +25,19 @@ tickets = Table(
     Column("resolved_by_bot", Boolean, nullable=False, default=False),
 )
 
-# Shown to the LLM so it can write correct SQL.
-SCHEMA_DESCRIPTION = """Table: tickets
+def get_categories() -> list[str]:
+    with get_engine().connect() as conn:
+        return [r[0] for r in conn.execute(select(tickets.c.category).distinct().order_by(tickets.c.category))]
+
+
+def schema_description() -> str:
+    """Shown to the LLM so it can write correct SQL. Categories come from the data."""
+    categories = ", ".join(f"'{c}'" for c in get_categories()) or "(none yet)"
+    return f"""Table: tickets
 - id INTEGER primary key
-- title TEXT: short summary written by the user
+- title TEXT: short summary of the ticket
 - description TEXT: full ticket text
-- category TEXT: one of 'Network', 'Access', 'Hardware', 'Software', 'Email'
+- category TEXT: one of {categories}
 - priority TEXT: one of 'High', 'Medium', 'Low'
 - status TEXT: 'Open' or 'Resolved'
 - created_at TIMESTAMP: when the ticket was raised

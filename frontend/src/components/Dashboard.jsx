@@ -41,27 +41,27 @@ export default function Dashboard() {
       <div className="grid two">
         <section className="card">
           <h3>Tickets per day</h3>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={data.daily} margin={{ left: -20, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d) => d.slice(5)} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} dot={false} name="Tickets" />
+              <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} dot={false} name="Tickets" isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </section>
 
         <section className="card">
           <h3>By category and priority</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data.by_category} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="category" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data.by_category} layout="vertical" margin={{ left: 0, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} width={125} interval={0} />
               <Tooltip />
               <Legend />
-              {["High", "Medium", "Low"].map((p) => <Bar key={p} dataKey={p} stackId="a" fill={COLORS[p]} />)}
+              {["High", "Medium", "Low"].map((p) => <Bar key={p} dataKey={p} stackId="a" fill={COLORS[p]} isAnimationActive={false} />)}
             </BarChart>
           </ResponsiveContainer>
         </section>
@@ -69,12 +69,13 @@ export default function Dashboard() {
 
       <div className="grid two">
         <section className="card">
-          <h3>Top recurring issues</h3>
+          <h3>Recurring issues</h3>
+          <p className="muted small">Most common phrases in ticket text</p>
           <table className="plain">
-            <thead><tr><th>Issue</th><th>Category</th><th>Tickets</th></tr></thead>
+            <thead><tr><th>Phrase</th><th>Main category</th><th>Tickets</th></tr></thead>
             <tbody>
-              {data.top_issues.map((t) => (
-                <tr key={t.title + t.category}><td>{t.title}</td><td>{t.category}</td><td>{t.count}</td></tr>
+              {data.top_phrases.map((t) => (
+                <tr key={t.phrase}><td>{t.phrase}</td><td>{t.category}</td><td>{t.count}</td></tr>
               ))}
             </tbody>
           </table>
@@ -86,14 +87,17 @@ export default function Dashboard() {
             <p className="muted">No metrics available.</p>
           ) : (
             <>
-              <p className="muted small">
-                TF-IDF + Logistic Regression · trained on {data.model_metrics.n_rows} tickets ({data.model_metrics.dataset}) · held-out test set
-              </p>
+              <p className="muted small">TF-IDF + Logistic Regression · scores on a held-out 20% test set</p>
               <table className="plain">
-                <thead><tr><th>Target</th><th>Accuracy</th><th>Macro F1</th><th>Test size</th></tr></thead>
+                <thead><tr><th>Target</th><th>Trained on</th><th>Accuracy</th><th>Macro F1</th></tr></thead>
                 <tbody>
                   {Object.entries(metrics).map(([k, m]) => (
-                    <tr key={k}><td>{k}</td><td>{(m.accuracy * 100).toFixed(1)}%</td><td>{m.macro_f1.toFixed(3)}</td><td>{m.n_test}</td></tr>
+                    <tr key={k}>
+                      <td>{k}</td>
+                      <td>{m.n_rows?.toLocaleString()} tickets<br /><span className="muted small dataset">{m.dataset}</span></td>
+                      <td>{(m.accuracy * 100).toFixed(1)}%</td>
+                      <td>{m.macro_f1.toFixed(3)}</td>
+                    </tr>
                   ))}
                 </tbody>
               </table>

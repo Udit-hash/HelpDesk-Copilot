@@ -1,5 +1,4 @@
 # Reporting a Phishing Email
-Category: Email
 
 ## How to recognise phishing
 - Unexpected requests for passwords, payments or gift cards.
@@ -10,4 +9,4 @@ Category: Email
 ## What to do
 1. Do not click links or open attachments.
 2. Click the "Report Phishing" button in the Outlook toolbar. This sends it to the Security team and removes it from your inbox.
-3. If you already clicked a link or entered your password, change your password immediately and raise an **Email** ticket with priority High.
+3. If you already clicked a link or entered your password, change your password immediately and raise a ticket with priority High.

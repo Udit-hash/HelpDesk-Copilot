@@ -1,5 +1,4 @@
 # Laptop Running Slow
-Category: Hardware
 
 ## Quick checks
 1. Restart the laptop. Many issues clear after a restart, especially if it has been running for more than 7 days.
@@ -8,7 +7,7 @@ Category: Hardware
 4. Install pending updates from the Software Center and restart.
 
 ## Battery and overheating
-Keep air vents clear and use the laptop on a hard surface. If the fan is constantly loud or the battery drains in under two hours, raise a **Hardware** ticket for a diagnostic check.
+Keep air vents clear and use the laptop on a hard surface. If the fan is constantly loud or the battery drains in under two hours, raise a ticket for a diagnostic check.
 
 ## Escalation
 Laptops older than 4 years are eligible for a refresh. Include your asset tag in the ticket.

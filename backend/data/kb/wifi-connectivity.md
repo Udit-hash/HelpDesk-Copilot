@@ -1,5 +1,4 @@
 # Office Wi-Fi Problems
-Category: Network
 
 ## Networks
 - `CORP-SECURE`: for corporate laptops; connects automatically using your device certificate.
@@ -12,4 +11,4 @@ Category: Network
 4. Check whether colleagues near you have the same problem. If yes, it may be an access point outage.
 
 ## Escalation
-Raise a **Network** ticket with your building, floor and the approximate location. Mark it High if a whole floor is affected.
+raise a ticket with your building, floor and the approximate location. Mark it High if a whole floor is affected.

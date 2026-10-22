@@ -78,6 +78,7 @@ input, textarea, select { font: inherit; }
 .table-wrap table, table.plain { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .table-wrap th, .table-wrap td, table.plain th, table.plain td { border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; }
 th { color: var(--muted); font-weight: 600; }
+.dataset { word-break: break-all; }
 .composer { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--border); }
 .composer input { flex: 1; min-width: 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; }
 .composer button, .form button {

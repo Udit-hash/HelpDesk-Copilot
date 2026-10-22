@@ -1,5 +1,4 @@
 # Printer Not Working
-Category: Hardware
 
 ## Common fixes
 1. Check that the printer is on, has paper, and shows no error on its display.
@@ -11,4 +10,4 @@ Category: Hardware
 Office printers use secure print. Send the job, then tap your ID badge on the printer to release it. Jobs are deleted after 24 hours.
 
 ## Escalation
-For paper jams that cannot be cleared, toner replacement, or hardware errors, raise a **Hardware** ticket and include the printer asset tag on the front of the device.
+For paper jams that cannot be cleared, toner replacement, or hardware errors, raise a ticket and include the printer asset tag on the front of the device.

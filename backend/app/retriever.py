@@ -14,6 +14,9 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -70,3 +73,19 @@ class Retriever:
 @lru_cache(maxsize=1)
 def get_retriever() -> Retriever:
     return Retriever(config.KB_DIR)
+
+
+# --- LangChain integration -------------------------------------------------------------------
+
+class KnowledgeBaseRetriever(BaseRetriever):
+    """LangChain retriever over the knowledge base: returns LangChain Documents with metadata."""
+
+    k: int = 3
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
+        return [
+            Document(page_content=hit["text"],
+                     metadata={"title": hit["title"], "section": hit["section"],
+                               "source": hit["source"], "score": hit["score"]})
+            for hit in get_retriever().search(query, k=self.k)
+        ]

@@ -6,7 +6,8 @@ venv/
 .pytest_cache/
 backend/.env
 backend/data/*.db
-backend/models/
+# The Kaggle dataset: download it yourself (see README), don't commit it
+backend/data/raw/
 
 # Node
 node_modules/

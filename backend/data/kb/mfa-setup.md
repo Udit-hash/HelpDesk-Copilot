@@ -1,5 +1,4 @@
 # Multi-Factor Authentication (MFA) Setup
-Category: Access
 
 ## Setting up MFA on a new phone
 1. Install the Microsoft Authenticator app.
@@ -13,4 +12,4 @@ Category: Access
 - Use the 6-digit code shown in the app instead of the push notification.
 
 ## Lost or replaced phone
-Raise an **Access** ticket asking for an "MFA reset". After the reset, register the new phone using the steps above within 24 hours.
+raise a ticket asking for an "MFA reset". After the reset, register the new phone using the steps above within 24 hours.

@@ -1,5 +1,4 @@
 # New Joiner Accounts and Access
-Category: Access
 
 ## Before day one
 The hiring manager raises a "New Joiner" request at least 5 working days before the start date. This creates the account, mailbox and laptop order.

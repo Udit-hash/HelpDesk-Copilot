@@ -1,6 +1,6 @@
 # IT Helpdesk Copilot
 
-An AI assistant for IT support teams. It **answers IT questions from a knowledge base (RAG)**, **classifies new tickets by category and priority (ML)**, lets engineers **ask questions about ticket data in plain English (text-to-SQL agent)**, and shows a **dashboard** of ticket trends.
+An AI assistant for IT support teams. It **answers IT questions from a knowledge base (RAG)**, **classifies new tickets with an ML model trained on 47,837 real IT tickets**, lets engineers **ask questions about ticket data in plain English (text-to-SQL agent built with LangChain)**, and shows a **dashboard** of ticket trends.
 
 **Live demo:** _add your Vercel link here_ · **API docs:** _add your Render link here_/docs
 
@@ -10,26 +10,37 @@ An AI assistant for IT support teams. It **answers IT questions from a knowledge
 
 | Feature | How it works |
 |---|---|
-| **Knowledge-base Q&A (RAG)** | IT runbooks are split into sections, indexed with TF-IDF, and the best matches are passed to the LLM, which answers only from them and cites the articles. |
-| **AI agent with tools** | The LLM chooses between three tools: `search_knowledge_base`, `query_tickets` (read-only SQL) and `classify_ticket`. Every tool call is shown in the UI ("How I answered"). |
-| **Ticket triage (ML)** | TF-IDF + Logistic Regression models predict **category** (Network, Access, Hardware, Software, Email) and **priority** (High, Medium, Low) with confidence scores. |
+| **AI agent (LangChain)** | A LangChain tool-calling agent chooses between three tools: `search_knowledge_base`, `query_tickets` (read-only SQL) and `classify_ticket`. Every tool call is shown in the UI ("How I answered"). |
+| **Knowledge-base Q&A (RAG)** | IT runbooks are split into sections and indexed with TF-IDF. A LangChain retriever returns the best matches as `Document`s, and the LLM answers only from them and cites the articles. |
+| **Ticket triage (ML)** | TF-IDF + Logistic Regression predicts the **category** (8 classes, trained on real tickets) and **priority** (High, Medium, Low) with confidence scores. |
 | **Self-service suggestions** | When a ticket is raised, the most relevant runbook section is suggested so users can try a fix first. |
-| **Dashboard** | Tickets per day, category × priority, top recurring issues, copilot resolution rate, average resolution time and live model metrics. |
+| **Dashboard** | Tickets per day, category × priority, recurring phrases in ticket text, copilot resolution rate, average resolution time and live model metrics. |
 | **Safe SQL** | LLM-written SQL passes three layers of protection (see [Security](#security)). |
 | **Offline mode** | Without an LLM key the app still works: chat returns the best-matching article, and triage and dashboard work fully. |
+
+## Model results
+
+| Model | Training data | Accuracy | Macro F1 |
+|---|---|---|---|
+| **Category** (8 classes) | 47,837 real IT tickets ([Kaggle](https://www.kaggle.com/datasets/adisongoh/it-service-ticket-classification-dataset)) | **86.1%** | **0.865** |
+| Priority (3 classes) | 2,000 synthetic tickets | 56.3% | 0.553 |
+
+Scores are on a held-out, stratified 20% test set. Macro F1 averages the F1 score of every class equally, so small classes like *Administrative rights* count as much as *Hardware*.
+
+**Why priority is trained on synthetic data:** the real dataset has no priority labels. Priority is also hard to predict from text alone (urgency often depends on who is affected, not the words used), which the lower score reflects.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     U[React frontend<br/>Vercel] -->|REST| API[FastAPI backend<br/>Render]
-    API --> AG[Agent loop]
-    AG <-->|tool calling| LLM[LLM API<br/>Groq / OpenAI-compatible]
-    AG --> KB[search_knowledge_base<br/>TF-IDF retriever]
+    API --> AG[LangChain agent<br/>bind_tools loop]
+    AG <-->|tool calling| LLM[ChatOpenAI<br/>Groq / OpenAI-compatible]
+    AG --> KB[search_knowledge_base<br/>LangChain retriever]
     AG --> SQL[query_tickets<br/>SQL guard + read-only DB]
     AG --> CLF[classify_ticket<br/>scikit-learn]
     KB --> MD[(Markdown runbooks)]
-    SQL --> DB[(SQLite / PostgreSQL)]
+    SQL --> DB[(PostgreSQL / SQLite)]
     API --> CLF
     API --> DB
 ```
@@ -37,8 +48,8 @@ flowchart LR
 ## Tech stack
 
 - **Backend:** Python, FastAPI, SQLAlchemy, scikit-learn, pandas
-- **AI:** LLM via any OpenAI-compatible API (Groq `llama-3.3-70b-versatile` by default), tool calling, RAG
-- **Database:** SQLite (default) or PostgreSQL
+- **AI:** LangChain (`langchain-core`, `langchain-openai`), tool calling, RAG; Groq LLM API (any OpenAI-compatible API works)
+- **Database:** PostgreSQL (SQLite works out of the box for quick local runs)
 - **Frontend:** React (Vite), Recharts, react-markdown
 - **DevOps:** GitHub Actions CI, Docker, Render (API), Vercel (frontend)
 
@@ -53,15 +64,19 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-cp .env.example .env             # then paste your LLM key into .env
-python scripts/train_classifier.py
+cp .env.example .env             # Windows: copy .env.example .env
 uvicorn app.main:app --reload
 ```
 
 The API runs at http://localhost:8000 (interactive docs at http://localhost:8000/docs).
-On first start it creates the database and loads the sample tickets.
+On first start it creates the database table and loads the tickets from `data/seed_tickets.csv`.
+If your database already has tickets from an older version, reload it with `python scripts/reset_db.py`.
 
-**LLM key:** create a free key at [console.groq.com/keys](https://console.groq.com/keys) and set `LLM_API_KEY` in `backend/.env`. To use another provider, change `LLM_BASE_URL` and `LLM_MODEL` (any OpenAI-compatible chat completions API with tool calling works). If a model has been retired, pick a current one from your provider's model list.
+**Settings in `backend/.env`:**
+- `LLM_API_KEY`: create a free key at [console.groq.com/keys](https://console.groq.com/keys).
+- `LLM_MODEL`: a chat model that supports tool calling. To list the models your key can use:
+  `python -c "import httpx; from app import config; r=httpx.get(config.LLM_BASE_URL+'/models', headers={'Authorization':'Bearer '+config.LLM_API_KEY}); print('\n'.join(sorted(m['id'] for m in r.json()['data'])))"`
+- `DATABASE_URL`: e.g. `postgresql://postgres:YOUR_PASSWORD@localhost:5432/helpdesk` for a local PostgreSQL database (create the empty `helpdesk` database first, for example in pgAdmin). Leave it unset to use SQLite.
 
 ### 2. Frontend
 
@@ -81,32 +96,38 @@ cd backend
 python -m pytest -q
 ```
 
-Tests cover the SQL guard, the read-only connection, all API endpoints, and the agent loop (with a mocked LLM).
+25 tests cover the SQL guard, the read-only connection, all API endpoints, and the LangChain agent, including a run of the real `ChatOpenAI` client against a fake OpenAI-compatible API, so tool calling is tested without a real LLM.
+
+## Retrain on the real dataset
+
+The trained model (`backend/models/`) and a sample of real tickets for the database (`backend/data/seed_tickets.csv`) are included. To retrain from scratch:
+
+1. Download `all_tickets_processed_improved_v3.csv` from the [Kaggle dataset page](https://www.kaggle.com/datasets/adisongoh/it-service-ticket-classification-dataset) and save it as `backend/data/raw/all_tickets_processed_improved_v3.csv`.
+2. Run:
+   ```bash
+   cd backend
+   python scripts/prepare_real_data.py --reset-db
+   ```
+
+This trains the category model on the real tickets, trains the priority model on the synthetic tickets, writes `data/seed_tickets.csv` (3,000 real tickets) and reloads the database. The real dataset only has ticket text and category, so the **priority, dates and status of the seeded tickets are simulated** to give the dashboard something to show.
+
+`scripts/generate_tickets.py` creates the synthetic dataset (`data/tickets.csv`).
 
 ## Deploy
 
+**Database:** create a free PostgreSQL database on [Neon](https://neon.tech) or Render and copy its connection URL.
+
 **Backend on Render**
 1. New > Web Service > connect this repo. Root directory: `backend` (or use New > Blueprint, which reads `render.yaml`).
-2. Build command: `pip install -r requirements.txt && python scripts/train_classifier.py`
+2. Build command: `pip install -r requirements.txt`
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Environment variables: `LLM_API_KEY`, `PYTHON_VERSION=3.12.7`, and `ALLOWED_ORIGINS=https://<your-app>.vercel.app`
+4. Environment variables: `LLM_API_KEY`, `LLM_MODEL`, `DATABASE_URL`, `PYTHON_VERSION=3.12.7`, and `ALLOWED_ORIGINS=https://<your-app>.vercel.app`
 
 **Frontend on Vercel**
 1. New Project > import this repo. Root directory: `frontend` (framework preset: Vite).
 2. Environment variable: `VITE_API_URL=https://<your-api>.onrender.com`
 
-> Render's free tier sleeps after inactivity, so the first request can take ~30 seconds. The SQLite database is re-created and re-seeded on each deploy. Set `DATABASE_URL` to a PostgreSQL database (e.g. Render Postgres or Neon) to persist new tickets.
-
-## Train on a real dataset
-
-The repo includes a generated sample dataset (`backend/data/tickets.csv`, created by `scripts/generate_tickets.py`) so the project runs out of the box. To get realistic accuracy numbers, train on a public IT-ticket dataset, e.g. from Kaggle:
-
-```bash
-python scripts/train_classifier.py --csv path/to/dataset.csv \
-    --text-cols "Document" --category-col "Topic_group" --priority-col ""
-```
-
-Change the column names to match your dataset. Metrics are saved to `models/metrics.json` and shown on the dashboard.
+> Render's free tier sleeps after inactivity, so the first request can take ~30 seconds.
 
 ## Security
 
@@ -114,9 +135,9 @@ The agent can read ticket data but can never change it:
 
 1. **SQL guard** (`app/sql_guard.py`): only a single `SELECT`/`WITH` statement is accepted; comments, multiple statements and write/DDL keywords (`DELETE`, `DROP`, `ATTACH`, `PRAGMA`, ...) are rejected.
 2. **Row limit:** every query is wrapped so at most 50 rows are returned.
-3. **Read-only connection:** SQLite is opened with `mode=ro`; PostgreSQL runs in a `READ ONLY` transaction with a 5-second statement timeout.
+3. **Read-only connection:** PostgreSQL runs in a `READ ONLY` transaction with a 5-second statement timeout; SQLite is opened with `mode=ro`.
 
-Rejected queries are returned to the LLM as an error, so it can explain the refusal. Other measures: CORS restricted to the frontend origin, input length limits, and the LLM key kept in environment variables.
+Rejected queries are returned to the LLM as a tool error, so it can explain the refusal. Other measures: CORS restricted to the frontend origin, input length limits, and the LLM key kept in environment variables.
 
 ## Project structure
 
@@ -124,15 +145,17 @@ Rejected queries are returned to the LLM as an error, so it can explain the refu
 backend/
   app/
     main.py          FastAPI routes (chat, tickets, classify, stats)
-    agent.py         LLM tool-calling loop and tools
-    retriever.py     Markdown chunking + TF-IDF search (RAG)
+    agent.py         LangChain tools and agent loop
+    llm.py           LangChain ChatOpenAI setup
+    retriever.py     Markdown chunking, TF-IDF search, LangChain retriever
     classifier.py    Training, evaluation and prediction
     sql_guard.py     SQL validation
     db.py            Database schema, seeding, read-only queries
-    llm.py           OpenAI-compatible API client
   data/kb/           Knowledge-base articles (Markdown)
-  data/tickets.csv   Sample ticket dataset
-  scripts/           Dataset generator and training script
+  data/seed_tickets.csv  Real tickets loaded into the database
+  data/tickets.csv   Synthetic tickets (priority model)
+  models/            Trained classifier and metrics
+  scripts/           Real-data preparation, training, synthetic data generator
   tests/             pytest suite
 frontend/
   src/components/    Chat, NewTicket, Dashboard
@@ -149,4 +172,4 @@ frontend/
 - Neural embeddings (e.g. `bge-small`) with a vector database instead of TF-IDF
 - Evaluation set for RAG answer quality
 - Authentication and per-user ticket history
-- Ticket status updates and engineer assignment
+- A transformer model (e.g. DistilBERT) for ticket classification

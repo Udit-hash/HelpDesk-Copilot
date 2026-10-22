@@ -1,5 +1,4 @@
 # Password Reset
-Category: Access
 
 ## When to use
 You forgot your password, or your password has expired.

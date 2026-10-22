@@ -1,5 +1,11 @@
-"""Thin client for any OpenAI-compatible chat completions API (Groq, OpenAI, Gemini, ...)."""
-import httpx
+"""LLM setup using LangChain.
+
+ChatOpenAI talks to any OpenAI-compatible API, so the same code works with Groq
+(default), OpenAI, Gemini's OpenAI endpoint, or a local model server.
+"""
+from functools import lru_cache
+
+from langchain_openai import ChatOpenAI
 
 from . import config
 
@@ -12,21 +18,13 @@ def is_configured() -> bool:
     return bool(config.LLM_API_KEY)
 
 
-def chat(messages: list[dict], tools: list[dict] | None = None, temperature: float = 0.1) -> dict:
-    """Send a chat request and return the assistant message (dict with content / tool_calls)."""
-    payload = {"model": config.LLM_MODEL, "messages": messages, "temperature": temperature}
-    if tools:
-        payload["tools"] = tools
-        payload["tool_choice"] = "auto"
-    try:
-        resp = httpx.post(
-            f"{config.LLM_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
-            json=payload,
-            timeout=60,
-        )
-    except httpx.HTTPError as e:
-        raise LLMError(f"Could not reach the LLM API: {e}") from e
-    if resp.status_code != 200:
-        raise LLMError(f"LLM API returned {resp.status_code}: {resp.text[:300]}")
-    return resp.json()["choices"][0]["message"]
+@lru_cache(maxsize=1)
+def get_chat_model() -> ChatOpenAI:
+    return ChatOpenAI(
+        model=config.LLM_MODEL,
+        api_key=config.LLM_API_KEY,
+        base_url=config.LLM_BASE_URL,
+        temperature=0.1,
+        timeout=60,
+        max_retries=1,
+    )

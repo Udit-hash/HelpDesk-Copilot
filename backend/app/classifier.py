@@ -1,4 +1,9 @@
-"""Ticket classifier: predicts category and priority from ticket text."""
+"""Ticket classifier: predicts category and priority from ticket text.
+
+Each target has its own TF-IDF + Logistic Regression pipeline. Targets can be
+trained on different datasets (e.g. category on real tickets, priority on the
+synthetic set, because the real dataset has no priority labels).
+"""
 import json
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -17,45 +22,68 @@ from . import config
 
 def build_pipeline() -> Pipeline:
     return Pipeline([
-        ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=2, sublinear_tf=True, stop_words="english")),
+        ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=2, max_features=200_000,
+                                  sublinear_tf=True, stop_words="english")),
         ("clf", LogisticRegression(max_iter=2000, C=4.0, class_weight="balanced")),
     ])
 
 
-def train_and_save(csv_path: Path, text_cols: list[str], category_col: str,
-                   priority_col: str | None, out_path: Path) -> dict:
+def train_target(texts: pd.Series, labels: pd.Series, dataset: str) -> tuple[Pipeline, dict]:
+    """Evaluate on a stratified 80/20 split, then refit on all data for the saved model."""
+    X_train, X_test, y_train, y_test = train_test_split(
+        texts, labels, test_size=0.2, random_state=42, stratify=labels)
+    pred = build_pipeline().fit(X_train, y_train).predict(X_test)
+    metrics = {
+        "dataset": dataset,
+        "n_rows": int(len(texts)),
+        "n_classes": int(labels.nunique()),
+        "accuracy": round(accuracy_score(y_test, pred), 4),
+        "macro_f1": round(f1_score(y_test, pred, average="macro"), 4),
+        "n_test": int(len(y_test)),
+        "report": classification_report(y_test, pred, output_dict=True, zero_division=0),
+    }
+    return build_pipeline().fit(texts, labels), metrics
+
+
+def read_texts(csv_path: Path, text_cols: list[str], label_col: str) -> tuple[pd.Series, pd.Series]:
     df = pd.read_csv(csv_path)
-    missing = [c for c in text_cols + [category_col] + ([priority_col] if priority_col else []) if c not in df]
+    missing = [c for c in text_cols + [label_col] if c not in df]
     if missing:
         raise ValueError(f"Columns not found in {csv_path.name}: {missing}. Available: {list(df.columns)}")
+    df = df.dropna(subset=[label_col])
+    texts = df[text_cols].fillna("").astype(str).agg(" ".join, axis=1).str.strip()
+    keep = texts.str.len() > 0
+    return texts[keep], df.loc[keep, label_col].astype(str)
 
-    text = df[text_cols].fillna("").astype(str).agg(" ".join, axis=1)
-    targets = {"category": category_col}
-    if priority_col:
-        targets["priority"] = priority_col
 
-    models, metrics = {}, {"trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                           "dataset": csv_path.name, "n_rows": len(df), "targets": {}}
-    for name, col in targets.items():
-        y = df[col].astype(str)
-        X_train, X_test, y_train, y_test = train_test_split(
-            text, y, test_size=0.2, random_state=42, stratify=y)
-        pipe = build_pipeline().fit(X_train, y_train)
-        pred = pipe.predict(X_test)
-        metrics["targets"][name] = {
-            "accuracy": round(accuracy_score(y_test, pred), 4),
-            "macro_f1": round(f1_score(y_test, pred, average="macro"), 4),
-            "n_test": len(y_test),
-            "report": classification_report(y_test, pred, output_dict=True, zero_division=0),
-        }
-        # Refit on all data for the saved model.
-        models[name] = build_pipeline().fit(text, y)
-
+def save_models(models: dict, metrics: dict, out_path: Path = None, merge: bool = True) -> None:
+    """Save models and metrics. With merge=True, targets not given keep their existing model."""
+    out_path = out_path or config.MODEL_PATH
+    metrics_path = out_path.with_name("metrics.json")
+    all_models, all_metrics = {}, {}
+    if merge and out_path.exists():
+        all_models = joblib.load(out_path)
+        if metrics_path.exists():
+            all_metrics = json.loads(metrics_path.read_text()).get("targets", {})
+    all_models.update(models)
+    all_metrics.update(metrics)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(models, out_path)
-    out_path.with_name("metrics.json").write_text(json.dumps(metrics, indent=2))
+    joblib.dump(all_models, out_path, compress=3)
+    metrics_path.write_text(json.dumps(
+        {"trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "targets": all_metrics}, indent=2))
     load_models.cache_clear()
-    return metrics
+
+
+def train_and_save(csv_path: Path, text_cols: list[str], category_col: str,
+                   priority_col: str | None, out_path: Path, merge: bool = False) -> dict:
+    """Train category (and optionally priority) from one CSV and save them."""
+    targets = {"category": category_col, **({"priority": priority_col} if priority_col else {})}
+    models, metrics = {}, {}
+    for name, col in targets.items():
+        texts, labels = read_texts(csv_path, text_cols, col)
+        models[name], metrics[name] = train_target(texts, labels, csv_path.name)
+    save_models(models, metrics, out_path, merge=merge)
+    return {"targets": metrics}
 
 
 @lru_cache(maxsize=1)

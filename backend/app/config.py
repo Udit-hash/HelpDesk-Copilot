@@ -25,7 +25,7 @@ _load_dotenv()
 # LLM: any OpenAI-compatible chat completions API (Groq by default, free tier available).
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
-LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 
 # Database: SQLite by default; set a postgresql:// URL to use PostgreSQL.
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'tickets.db'}")
@@ -34,7 +34,14 @@ if DATABASE_URL.startswith("postgres://"):  # Render/Heroku style URL
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
-TICKETS_CSV = Path(os.getenv("TICKETS_CSV", DATA_DIR / "tickets.csv"))
+# Synthetic tickets (title, description, category, priority): used to train the priority model.
+SYNTHETIC_CSV = DATA_DIR / "tickets.csv"
+# Real Kaggle dataset, downloaded by you (see README): used to train the category model.
+REAL_DATASET_CSV = DATA_DIR / "raw" / "all_tickets_processed_improved_v3.csv"
+# Tickets loaded into the database on first start. scripts/prepare_real_data.py creates
+# seed_tickets.csv from the real dataset; until then the synthetic tickets are used.
+_seed = DATA_DIR / "seed_tickets.csv"
+TICKETS_CSV = Path(os.getenv("TICKETS_CSV", _seed if _seed.exists() else SYNTHETIC_CSV))
 KB_DIR = Path(os.getenv("KB_DIR", DATA_DIR / "kb"))
 MODEL_PATH = Path(os.getenv("MODEL_PATH", MODELS_DIR / "classifier.joblib"))
 METRICS_PATH = MODEL_PATH.with_name("metrics.json")

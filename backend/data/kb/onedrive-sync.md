@@ -1,5 +1,4 @@
 # OneDrive Not Syncing
-Category: Software
 
 ## Resolution steps
 1. Click the OneDrive cloud icon in the system tray and check for errors or a "Paused" status.

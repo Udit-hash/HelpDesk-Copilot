@@ -1,5 +1,4 @@
 # Microsoft Teams Audio or Video Problems
-Category: Software
 
 ## Resolution steps
 1. In Teams, go to Settings > Devices and select the correct speaker, microphone and camera.
@@ -9,4 +8,4 @@ Category: Software
 5. Update Teams: click the three dots next to your profile picture > Check for updates.
 
 ## Escalation
-If the headset or webcam is faulty, raise a **Hardware** ticket. For Teams errors, raise a **Software** ticket with a screenshot.
+If the headset or webcam is faulty, raise a ticket for a replacement. For Teams errors, raise a ticket with a screenshot.

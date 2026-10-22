@@ -1,0 +1,117 @@
+{
+  "trained_at": "2026-10-21T19:16:09+00:00",
+  "targets": {
+    "category": {
+      "dataset": "all_tickets_processed_improved_v3.csv",
+      "n_rows": 47837,
+      "n_classes": 8,
+      "accuracy": 0.8608,
+      "macro_f1": 0.8653,
+      "n_test": 9568,
+      "report": {
+        "Access": {
+          "precision": 0.8968641114982578,
+          "recall": 0.9031578947368422,
+          "f1-score": 0.9,
+          "support": 1425.0
+        },
+        "Administrative rights": {
+          "precision": 0.7639257294429708,
+          "recall": 0.8181818181818182,
+          "f1-score": 0.7901234567901234,
+          "support": 352.0
+        },
+        "HR Support": {
+          "precision": 0.8842857142857142,
+          "recall": 0.8506642235455795,
+          "f1-score": 0.8671491944898436,
+          "support": 2183.0
+        },
+        "Hardware": {
+          "precision": 0.8530411786928599,
+          "recall": 0.828928046989721,
+          "f1-score": 0.8408117668962949,
+          "support": 2724.0
+        },
+        "Internal Project": {
+          "precision": 0.8480176211453745,
+          "recall": 0.9080188679245284,
+          "f1-score": 0.876993166287016,
+          "support": 424.0
+        },
+        "Miscellaneous": {
+          "precision": 0.8015925680159257,
+          "recall": 0.8555240793201133,
+          "f1-score": 0.8276807125727988,
+          "support": 1412.0
+        },
+        "Purchase": {
+          "precision": 0.9423076923076923,
+          "recall": 0.8945233265720081,
+          "f1-score": 0.9177939646201873,
+          "support": 493.0
+        },
+        "Storage": {
+          "precision": 0.8827586206896552,
+          "recall": 0.9225225225225225,
+          "f1-score": 0.9022026431718062,
+          "support": 555.0
+        },
+        "accuracy": 0.8607859531772575,
+        "macro avg": {
+          "precision": 0.8590991545098063,
+          "recall": 0.8726900974741416,
+          "f1-score": 0.8653443631035087,
+          "support": 9568.0
+        },
+        "weighted avg": {
+          "precision": 0.8619262128855126,
+          "recall": 0.8607859531772575,
+          "f1-score": 0.8609643145446855,
+          "support": 9568.0
+        }
+      }
+    },
+    "priority": {
+      "dataset": "tickets.csv",
+      "n_rows": 2000,
+      "n_classes": 3,
+      "accuracy": 0.5625,
+      "macro_f1": 0.5527,
+      "n_test": 400,
+      "report": {
+        "High": {
+          "precision": 0.6445783132530121,
+          "recall": 0.7278911564625851,
+          "f1-score": 0.6837060702875399,
+          "support": 147.0
+        },
+        "Low": {
+          "precision": 0.5806451612903226,
+          "recall": 0.631578947368421,
+          "f1-score": 0.6050420168067226,
+          "support": 114.0
+        },
+        "Medium": {
+          "precision": 0.41818181818181815,
+          "recall": 0.33093525179856115,
+          "f1-score": 0.36947791164658633,
+          "support": 139.0
+        },
+        "accuracy": 0.5625,
+        "macro avg": {
+          "precision": 0.5478017642417176,
+          "recall": 0.5634684518765224,
+          "f1-score": 0.5527419995802829,
+          "support": 400.0
+        },
+        "weighted avg": {
+          "precision": 0.5476845829064056,
+          "recall": 0.5625,
+          "f1-score": 0.5520925299177756,
+          "support": 400.0
+        }
+      }
+    }
+  }
+}

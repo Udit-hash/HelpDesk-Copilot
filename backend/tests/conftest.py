@@ -8,6 +8,7 @@ _tmp = Path(tempfile.mkdtemp())
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp / 'test.db'}"
 os.environ["MODEL_PATH"] = str(_tmp / "classifier.joblib")
 os.environ["LLM_API_KEY"] = ""
+os.environ["TICKETS_CSV"] = str(Path(__file__).resolve().parents[1] / "data" / "tickets.csv")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest  # noqa: E402

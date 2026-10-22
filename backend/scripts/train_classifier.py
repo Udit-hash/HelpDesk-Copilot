@@ -3,9 +3,9 @@
 Model: TF-IDF (word 1-2 grams) + Logistic Regression, one model per target.
 
 Usage:
-    python scripts/train_classifier.py                       # uses data/tickets.csv
-    python scripts/train_classifier.py --csv my_data.csv \
-        --text-cols "Document" --category-col "Topic_group"  # e.g. a Kaggle dataset
+    python scripts/train_classifier.py        # both targets on the synthetic data/tickets.csv
+
+To train on the real Kaggle dataset, use scripts/prepare_real_data.py instead.
 """
 import argparse
 import json
@@ -20,13 +20,15 @@ from app.classifier import train_and_save  # noqa: E402
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default=str(config.TICKETS_CSV))
+    ap.add_argument("--csv", default=str(config.SYNTHETIC_CSV))
     ap.add_argument("--text-cols", default="title,description",
                     help="comma-separated columns joined to form the ticket text")
     ap.add_argument("--category-col", default="category")
     ap.add_argument("--priority-col", default="priority",
                     help="set to '' if the dataset has no priority column")
     ap.add_argument("--out", default=str(config.MODEL_PATH))
+    ap.add_argument("--merge", action="store_true",
+                    help="keep already-trained targets that this run does not train")
     args = ap.parse_args()
 
     metrics = train_and_save(
@@ -35,6 +37,7 @@ def main():
         category_col=args.category_col,
         priority_col=args.priority_col or None,
         out_path=Path(args.out),
+        merge=args.merge,
     )
     print(json.dumps({k: {m: v[m] for m in ("accuracy", "macro_f1", "n_test")}
                       for k, v in metrics["targets"].items()}, indent=2))

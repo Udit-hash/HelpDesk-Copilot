@@ -1,5 +1,4 @@
 # Disk Space Full
-Category: Hardware
 
 ## Free up space
 1. Run Disk Cleanup: Start > "Disk Cleanup" > select C: > Clean up system files.
@@ -11,4 +10,4 @@ Category: Hardware
 Use Settings > System > Storage to see which folders use the most space.
 
 ## Escalation
-If the disk is still more than 90% full, raise a **Hardware** ticket; the laptop may need a larger disk.
+If the disk is still more than 90% full, raise a ticket; the laptop may need a larger disk.

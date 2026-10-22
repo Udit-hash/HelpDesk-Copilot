@@ -1,5 +1,4 @@
 # VPN Connection Issues
-Category: Network
 
 ## Symptoms
 - VPN client shows "Connection failed" or keeps reconnecting.
@@ -13,4 +12,4 @@ Category: Network
 5. If MFA prompts do not arrive, see the MFA Setup article.
 
 ## Escalation
-If the VPN still fails after these steps, raise a ticket with category **Network** and attach a screenshot of the error and the output of `ipconfig /all`.
+If the VPN still fails after these steps, raise a ticket and attach a screenshot of the error and the output of `ipconfig /all`.

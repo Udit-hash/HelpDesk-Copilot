@@ -6,6 +6,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, CountVectorizer
 
 from . import agent, classifier, config, db, llm
 from .retriever import get_retriever
@@ -17,8 +18,8 @@ log = logging.getLogger("copilot")
 async def lifespan(_: FastAPI):
     db.init_db(seed=True)
     if not config.MODEL_PATH.exists():
-        log.warning("No trained model found - training on %s", config.TICKETS_CSV)
-        classifier.train_and_save(config.TICKETS_CSV, ["title", "description"], "category", "priority",
+        log.warning("No trained model found - training on %s", config.SYNTHETIC_CSV)
+        classifier.train_and_save(config.SYNTHETIC_CSV, ["title", "description"], "category", "priority",
                                   config.MODEL_PATH)
     get_retriever()  # build the search index at startup
     yield
@@ -99,7 +100,7 @@ def stats(days: int = 30):
 
     daily = recent.groupby(recent["created_at"].dt.date).size()
     by_cat_pri = recent.groupby(["category", "priority"]).size().unstack(fill_value=0)
-    top_issues = recent.groupby(["title", "category"]).size().sort_values(ascending=False).head(8)
+    top_phrases = recurring_phrases(recent)
 
     return {
         "days": days,
@@ -111,6 +112,48 @@ def stats(days: int = 30):
         "daily": [{"date": str(d), "count": int(c)} for d, c in daily.items()],
         "by_category": [{"category": c, **{p: int(row.get(p, 0)) for p in ("High", "Medium", "Low")}}
                         for c, row in by_cat_pri.iterrows()],
-        "top_issues": [{"title": t, "category": c, "count": int(n)} for (t, c), n in top_issues.items()],
+        "top_phrases": top_phrases,
         "model_metrics": classifier.load_metrics(),
     }
+
+
+# Words that appear in almost every ticket (greetings, sign-offs, dates) and say nothing about the issue.
+TICKET_STOP_WORDS = list(ENGLISH_STOP_WORDS | {
+    "hi", "hello", "dear", "team", "thanks", "thank", "regards", "kind", "best", "morning", "afternoon",
+    "good", "please", "pm", "am", "sent", "re", "fw", "fwd", "ok", "yes", "know", "let", "help", "need",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "may", "june", "july", "august", "september",
+    "october", "november", "december",
+    # email signature and header noise in the real dataset
+    "importance", "ext", "hub", "analyst", "tel", "mob", "cc", "subject", "date", "wrote",
+})
+
+
+def recurring_phrases(df: pd.DataFrame, top: int = 8, max_per_category: int = 2) -> list[dict]:
+    """Most common 2-3 word phrases across tickets, counted once per ticket."""
+    if len(df) < 5:
+        return []
+    text = (df["title"].fillna("") + " " + df["description"].fillna("")).str.lower()
+    vec = CountVectorizer(ngram_range=(2, 3), stop_words=TICKET_STOP_WORDS, min_df=3, binary=True,
+                          token_pattern=r"(?u)\b[a-z][a-z]+\b")
+    try:
+        matrix = vec.fit_transform(text)
+    except ValueError:  # no phrase appears often enough
+        return []
+    counts = matrix.sum(axis=0).A1
+    phrases = vec.get_feature_names_out()
+    result, used, per_category = [], set(), {}
+    for i in counts.argsort()[::-1]:
+        words = set(phrases[i].split())
+        if words & used:  # skip overlapping phrases, e.g. "new starter" then "starter form"
+            continue
+        rows = matrix[:, i].nonzero()[0]
+        category = df["category"].iloc[rows].mode().iat[0]
+        if per_category.get(category, 0) >= max_per_category:  # keep the list varied
+            continue
+        result.append({"phrase": phrases[i], "count": int(counts[i]), "category": category})
+        per_category[category] = per_category.get(category, 0) + 1
+        used |= words
+        if len(result) == top:
+            break
+    return result
