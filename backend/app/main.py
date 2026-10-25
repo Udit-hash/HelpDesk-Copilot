@@ -27,7 +27,37 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="IT Helpdesk Copilot API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=config.ALLOWED_ORIGINS,
-                   allow_methods=["GET", "POST"], allow_headers=["*"])
+                   allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+
+# Security headers on every response (findings from the OWASP ZAP DAST scan, see SECURITY.md).
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",              # browser must not guess content types (ZAP 10021)
+    "X-Frame-Options": "DENY",                        # the API must never be shown in a frame (ZAP 10020)
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cache-Control": "no-store",                      # ticket data should not be cached by browsers or proxies
+    # Cross-origin isolation against Spectre-style side channels (ZAP 90004). The frontend calls the API
+    # with CORS-mode fetch, which CORP does not block, so "same-origin" is safe here.
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+# The API only returns JSON, so it needs no scripts, styles or frames at all (ZAP 10038).
+API_CSP = "default-src 'none'; frame-ancestors 'none'"
+# The interactive docs (/docs, /redoc) load Swagger UI / ReDoc from a CDN, so they get a looser policy.
+DOCS_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://fastapi.tiangolo.com; "
+            "worker-src 'self' blob:; frame-ancestors 'none'")
+DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.update(SECURITY_HEADERS)
+    response.headers["Content-Security-Policy"] = (
+        DOCS_CSP if request.url.path.startswith(DOCS_PATHS) else API_CSP)
+    return response
 
 
 class ChatMessage(BaseModel):

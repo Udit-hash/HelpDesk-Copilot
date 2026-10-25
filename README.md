@@ -96,7 +96,7 @@ cd backend
 python -m pytest -q
 ```
 
-25 tests cover the SQL guard, the read-only connection, all API endpoints, and the LangChain agent, including a run of the real `ChatOpenAI` client against a fake OpenAI-compatible API, so tool calling is tested without a real LLM.
+27 tests cover the SQL guard, the read-only connection, all API endpoints, and the LangChain agent, including a run of the real `ChatOpenAI` client against a fake OpenAI-compatible API, so tool calling is tested without a real LLM.
 
 ## Retrain on the real dataset
 
@@ -120,7 +120,7 @@ This trains the category model on the real tickets, trains the priority model on
 **Backend on Render**
 1. New > Web Service > connect this repo. Root directory: `backend` (or use New > Blueprint, which reads `render.yaml`).
 2. Build command: `pip install -r requirements.txt`
-3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-server-header`
 4. Environment variables: `LLM_API_KEY`, `LLM_MODEL`, `DATABASE_URL`, `PYTHON_VERSION=3.12.7`, and `ALLOWED_ORIGINS=https://<your-app>.vercel.app`
 
 **Frontend on Vercel**
@@ -142,6 +142,7 @@ Full details, including the threat model and findings log, are in **[SECURITY.md
 | SCA (dependency CVEs) | pip-audit, npm audit, Dependabot |
 | Container security | Trivy (Dockerfile + image) |
 | SBOM | Syft: CycloneDX + SPDX, published as build artifacts |
+| DAST | OWASP ZAP: active API scan from the OpenAPI spec + frontend baseline scan |
 
 Each check is a quality gate: High or Critical findings fail the build. All GitHub Actions are pinned to commit SHAs.
 
@@ -150,7 +151,7 @@ Each check is a quality gate: High or Critical findings fail the build. All GitH
 2. **Row limit:** at most 50 rows per query.
 3. **Read-only connection:** PostgreSQL runs in a `READ ONLY` transaction with a 5-second statement timeout, so even a query that slips past the guard cannot write.
 
-Other measures: non-root container, CORS restricted to the frontend origin, input validation, secrets only in environment variables.
+Other measures: non-root container, CORS restricted to the frontend origin, security headers (CSP, X-Frame-Options, COOP/COEP/CORP and more) on the API and frontend, input validation, secrets only in environment variables.
 
 ## Project structure
 

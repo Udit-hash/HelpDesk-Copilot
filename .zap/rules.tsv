@@ -1,0 +1,4 @@
+10027	IGNORE	(Information Disclosure - Suspicious Comments: comments inside minified third-party libraries in the JS bundle, not our code)
+10109	IGNORE	(Modern Web Application: informational, tells ZAP the frontend is a single-page app)
+10104	IGNORE	(User Agent Fuzzer: informational, API responds the same to all user agents)
+10049	IGNORE	(Storable/Non-Storable Content: informational cache report; API responses are deliberately no-store)

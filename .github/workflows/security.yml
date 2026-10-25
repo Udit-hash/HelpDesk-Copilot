@@ -12,6 +12,7 @@
 # | container        | Container security    | Trivy                   | fixable High/Critical CVEs, Dockerfile    |
 # |                  |                       |                         | misconfigurations                         |
 # | sbom             | SBOM                  | Syft (anchore)          | never; produces CycloneDX + SPDX files    |
+# | dast             | DAST                  | OWASP ZAP               | any alert not accepted in .zap/rules.tsv  |
 #
 # Supply-chain hardening used here:
 # - Every third-party action is pinned to a full commit SHA (a tag like @v4 can be moved
@@ -191,3 +192,57 @@ jobs:
           path: |
             sbom.cdx.json
             sbom.spdx.json
+
+  dast:
+    name: DAST (OWASP ZAP)
+    runs-on: ubuntu-latest
+    # Runs against a throwaway copy of the app started inside this job (SQLite, sample data).
+    # Never point an active scan at production: it sends real attack requests and creates data.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Start the backend API
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          ALLOWED_ORIGINS=http://localhost:5173 nohup uvicorn app.main:app --port 8000 --no-server-header > ../api.log 2>&1 &
+      - name: Build and start the frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: http://localhost:8000
+        run: |
+          npm ci
+          npm run build
+          nohup npx vite preview --port 5173 --strictPort > ../web.log 2>&1 &
+      - name: Wait until both are up
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8000/api/health > /dev/null && curl -sf http://localhost:5173 > /dev/null && exit 0
+            sleep 2
+          done
+          cat api.log web.log; exit 1
+      - name: API scan (active attacks on every endpoint in the OpenAPI spec)
+        uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          target: http://localhost:8000/openapi.json
+          format: openapi
+          rules_file_name: .zap/rules.tsv
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-api-scan
+      - name: Frontend baseline scan (passive checks such as security headers)
+        if: always()
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:5173
+          rules_file_name: .zap/rules.tsv
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-baseline-scan

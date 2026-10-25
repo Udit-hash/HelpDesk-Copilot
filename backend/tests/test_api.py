@@ -40,3 +40,20 @@ def test_readonly_connection_blocks_writes(client):
             conn.commit()
 
 
+
+
+def test_security_headers(client):
+    """Headers added after the OWASP ZAP DAST scan (see SECURITY.md)."""
+    h = client.get("/api/health").headers
+    assert h["x-content-type-options"] == "nosniff"
+    assert h["x-frame-options"] == "DENY"
+    assert h["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+    assert h["cross-origin-resource-policy"] == "same-origin"
+    assert h["cache-control"] == "no-store"
+    assert "cdn.jsdelivr.net" in client.get("/docs").headers["content-security-policy"]
+
+
+def test_cors_rejects_unknown_origin(client):
+    r = client.options("/api/chat", headers={"Origin": "https://evil.example",
+                                             "Access-Control-Request-Method": "POST"})
+    assert r.status_code == 400 and "access-control-allow-origin" not in r.headers
