@@ -51,11 +51,11 @@ flowchart LR
 - **AI:** LangChain (`langchain-core`, `langchain-openai`), tool calling, RAG; Groq LLM API (any OpenAI-compatible API works)
 - **Database:** PostgreSQL (SQLite works out of the box for quick local runs)
 - **Frontend:** React (Vite), Recharts, react-markdown
-- **DevOps:** GitHub Actions CI, Docker, Render (API), Vercel (frontend)
+- **DevOps & security:** GitHub Actions (CI + DevSecOps pipeline), Docker, Gitleaks, Bandit, CodeQL, pip-audit, Trivy, Syft (SBOM), Dependabot; Render (API), Vercel (frontend)
 
 ## Run locally
 
-**Requirements:** Python 3.11+ and Node 18+.
+**Requirements:** Python 3.11+ and Node 20.19+ (or 22.12+).
 
 ### 1. Backend
 
@@ -131,13 +131,26 @@ This trains the category model on the real tickets, trains the priority model on
 
 ## Security
 
-The agent can read ticket data but can never change it:
+Full details, including the threat model and findings log, are in **[SECURITY.md](SECURITY.md)**.
 
-1. **SQL guard** (`app/sql_guard.py`): only a single `SELECT`/`WITH` statement is accepted; comments, multiple statements and write/DDL keywords (`DELETE`, `DROP`, `ATTACH`, `PRAGMA`, ...) are rejected.
-2. **Row limit:** every query is wrapped so at most 50 rows are returned.
-3. **Read-only connection:** PostgreSQL runs in a `READ ONLY` transaction with a 5-second statement timeout; SQLite is opened with `mode=ro`.
+**DevSecOps pipeline** (`.github/workflows/security.yml`), run on every push, pull request and weekly:
 
-Rejected queries are returned to the LLM as a tool error, so it can explain the refusal. Other measures: CORS restricted to the frontend origin, input length limits, and the LLM key kept in environment variables.
+| Check | Tool |
+|---|---|
+| Secrets scanning (code + Git history) | Gitleaks |
+| SAST | Bandit (Python), CodeQL (Python + JavaScript) |
+| SCA (dependency CVEs) | pip-audit, npm audit, Dependabot |
+| Container security | Trivy (Dockerfile + image) |
+| SBOM | Syft: CycloneDX + SPDX, published as build artifacts |
+
+Each check is a quality gate: High or Critical findings fail the build. All GitHub Actions are pinned to commit SHAs.
+
+**AI and database safety.** The agent can read ticket data but can never change it:
+1. **SQL guard** (`app/sql_guard.py`): only a single `SELECT`/`WITH` statement is accepted; comments, multiple statements and write/DDL keywords are rejected.
+2. **Row limit:** at most 50 rows per query.
+3. **Read-only connection:** PostgreSQL runs in a `READ ONLY` transaction with a 5-second statement timeout, so even a query that slips past the guard cannot write.
+
+Other measures: non-root container, CORS restricted to the frontend origin, input validation, secrets only in environment variables.
 
 ## Project structure
 

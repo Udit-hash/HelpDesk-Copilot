@@ -1,0 +1,193 @@
+# DevSecOps pipeline: security checks that run on every push and pull request.
+#
+# Each job is a quality gate: if it finds a serious problem, the job fails and the
+# pull request shows a red X, so insecure changes can't be merged unnoticed.
+#
+# | Job              | Type                  | Tool                    | Fails the build on                        |
+# |------------------|-----------------------|-------------------------|-------------------------------------------|
+# | secrets          | Secrets scanning      | Gitleaks                | any secret found in the code or history   |
+# | sast-bandit      | SAST (Python)         | Bandit                  | Medium or High severity findings          |
+# | codeql           | SAST (Python + JS)    | GitHub CodeQL           | reports to the Security tab               |
+# | sca              | SCA (dependencies)    | pip-audit, npm audit    | known CVEs (npm: High or Critical)        |
+# | container        | Container security    | Trivy                   | fixable High/Critical CVEs, Dockerfile    |
+# |                  |                       |                         | misconfigurations                         |
+# | sbom             | SBOM                  | Syft (anchore)          | never; produces CycloneDX + SPDX files    |
+#
+# Supply-chain hardening used here:
+# - Every third-party action is pinned to a full commit SHA (a tag like @v4 can be moved
+#   by whoever controls the action's repository; a commit SHA cannot).
+# - The default GITHUB_TOKEN is read-only; jobs ask for extra permissions only if needed.
+# - actions/checkout does not keep the token on disk (persist-credentials: false).
+# - The Gitleaks binary is checked against its published SHA-256 checksum.
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"   # every Monday: catches NEW CVEs in dependencies that haven't changed
+  workflow_dispatch:        # allows running it manually from the Actions tab
+
+permissions:
+  contents: read   # read-only token by default; jobs request more only when needed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secrets scan (Gitleaks)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0              # full history: a secret deleted later is still in old commits
+          persist-credentials: false
+      - name: Install Gitleaks (checksum verified)
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check -
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Scan code and git history
+        run: ./gitleaks git . --redact --verbose --exit-code 1
+
+  sast-bandit:
+    name: SAST - Python (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements-security.txt
+      - name: Run Bandit (fails on Medium or High severity)
+        run: bandit -r backend/app backend/scripts --severity-level medium
+
+  codeql:
+    name: SAST - CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read           # check out the code
+      security-events: write   # upload results to the repository's Security tab
+      actions: read            # read workflow run details (needed by CodeQL)
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  sca:
+    name: SCA - dependency vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: pip install -r backend/requirements-security.txt
+      - name: Python dependencies (pip-audit, fails on any known vulnerability)
+        run: pip-audit -r backend/requirements.txt --desc on
+      - name: JavaScript dependencies (npm audit, fails on High or Critical)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  container:
+    name: Container security (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan Dockerfile for misconfigurations
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: config
+          scan-ref: backend
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the backend image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: backend
+          load: true
+          push: false
+          tags: helpdesk-api:ci
+      - name: Scan the image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          skip-setup-trivy: true   # already installed by the previous Trivy step
+          scan-type: image
+          image-ref: helpdesk-api:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true     # only fail on vulnerabilities that have a fix available
+          exit-code: "1"
+      - name: SBOM of the container image (CycloneDX)
+        if: always()
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: helpdesk-api:ci
+          format: cyclonedx-json
+          output-file: sbom-image.cdx.json
+          upload-artifact: false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sbom-container-image
+          path: sbom-image.cdx.json
+          if-no-files-found: ignore
+
+  sbom:
+    name: SBOM (CycloneDX + SPDX)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: CycloneDX SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+      - name: SPDX SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-source
+          path: |
+            sbom.cdx.json
+            sbom.spdx.json

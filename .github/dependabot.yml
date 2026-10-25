@@ -1,0 +1,25 @@
+# Dependabot opens pull requests when a dependency has a security fix or a new version,
+# so vulnerable components get updated instead of silently going stale.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions   # keeps the SHA-pinned actions up to date
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker           # keeps the python base image up to date
+    directory: /backend
+    schedule:
+      interval: weekly
