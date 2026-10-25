@@ -62,7 +62,8 @@ def make_title(text: str, words: int = 8) -> str:
 
 
 def build_seed(df: pd.DataFrame, n: int, days: int, seed: int) -> pd.DataFrame:
-    rng = random.Random(seed)
+    # Bandit B311: non-cryptographic random is fine here; it only simulates sample metadata.
+    rng = random.Random(seed)  # nosec B311
     sample = df.sample(n=min(n, len(df)), random_state=seed)
     end = datetime.now().replace(microsecond=0)
     rows = []

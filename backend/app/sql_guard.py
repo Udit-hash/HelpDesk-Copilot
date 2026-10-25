@@ -42,4 +42,6 @@ def validate_select(sql: str, row_limit: int = 50) -> str:
     if match:
         raise UnsafeSQLError(f"Keyword '{match.group(0)}' is not allowed.")
 
-    return f"SELECT * FROM ({query}) AS q LIMIT {int(row_limit)}"
+    # Bandit B608 (CWE-89) - accepted risk: running LLM-written SQL is this tool's purpose. The query has
+    # passed the checks above and runs on a read-only connection (see db.run_readonly_query).
+    return f"SELECT * FROM ({query}) AS q LIMIT {int(row_limit)}"  # nosec B608

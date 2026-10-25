@@ -158,7 +158,8 @@ def main():
     ap.add_argument("--out", default=str(Path(__file__).resolve().parents[1] / "data" / "tickets.csv"))
     args = ap.parse_args()
 
-    rng = random.Random(args.seed)
+    # Bandit B311: non-cryptographic random is fine here; it only generates sample data.
+    rng = random.Random(args.seed)  # nosec B311
     start = datetime(2026, 8, 1, 9, 0, 0)
     rows = sorted((make_ticket(rng, i + 1, start, args.days, args.noise) for i in range(args.n)),
                   key=lambda r: r["created_at"])

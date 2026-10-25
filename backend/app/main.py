@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, CountVectorizer
@@ -90,7 +90,7 @@ def create_ticket(req: TicketRequest):
 
 
 @app.get("/api/stats")
-def stats(days: int = 30):
+def stats(days: int = Query(30, ge=1, le=365)):
     df = db.load_dataframe()
     if df.empty:
         return {"total": 0}
@@ -134,8 +134,9 @@ def recurring_phrases(df: pd.DataFrame, top: int = 8, max_per_category: int = 2)
     if len(df) < 5:
         return []
     text = (df["title"].fillna("") + " " + df["description"].fillna("")).str.lower()
+    # Bandit B106 is a false positive: "token_pattern" is a regex for splitting words, not a password.
     vec = CountVectorizer(ngram_range=(2, 3), stop_words=TICKET_STOP_WORDS, min_df=3, binary=True,
-                          token_pattern=r"(?u)\b[a-z][a-z]+\b")
+                          token_pattern=r"(?u)\b[a-z][a-z]+\b")  # nosec B106
     try:
         matrix = vec.fit_transform(text)
     except ValueError:  # no phrase appears often enough
